@@ -1,0 +1,11 @@
+{
+  "name": "RCTTCPSocket",
+  "version": "1.0.0",
+  "description": "",
+  "author": "PatrickSCLin<patricksclin@gmail.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/PatrickSCLin/RCTTCPSocket",
+  "dependencies": {
+    "base64-js": "0.0.8"
+  }
+}

@@ -4,6 +4,7 @@ var RCTDeviceEventEmitter = require('RCTDeviceEventEmitter');
 var RCTTCPSocketManager = require('NativeModules').TCPSocketManager;
 
 var TCPSocketBase = require('./TCPSocketBase.ios');
+var Base64 = require('base64-js');
 
 var TCPSocketId = 0;
 
@@ -25,13 +26,12 @@ class TCPSocket extends TCPSocketBase {
     RCTTCPSocketManager.close(this._socketId);
   }
 
-  sendStringImpl(message: string): void {
-    RCTTCPSocketManager.send(message, this._socketId);
+  sendStringImpl(data: string): void {
+    RCTTCPSocketManager.send(data, this._socketId, false);
   }
 
-  sendArrayBufferImpl(): void {
-    // TODO
-    console.warn('Sending ArrayBuffers is not yet supported');
+  sendByteArrayImpl(data: Uint8Array): void {
+    RCTTCPSocketManager.send(Base64.fromByteArray(data), this._socketId, true);
   }
 
   _unregisterEvents(): void {
@@ -42,18 +42,18 @@ class TCPSocket extends TCPSocketBase {
   _registerEvents(id: number): void {
     this._subs = [
       RCTDeviceEventEmitter.addListener(
-        'TCPsocketMessage',
+        'TCPSocketMessage',
         function(ev) {
           if (ev.id !== id) {
             return;
           }
-          this.onmessage && this.onmessage({
-            data: ev.data
+          this.ondata && this.ondata({
+            data: Base64.toByteArray(ev.data)
           });
         }.bind(this)
       ),
       RCTDeviceEventEmitter.addListener(
-        'TCPsocketOpen',
+        'TCPSocketOpen',
         function(ev) {
           if (ev.id !== id) {
             return;
@@ -63,7 +63,7 @@ class TCPSocket extends TCPSocketBase {
         }.bind(this)
       ),
       RCTDeviceEventEmitter.addListener(
-        'TCPsocketClosed',
+        'TCPSocketClosed',
         function(ev) {
           if (ev.id !== id) {
             return;
@@ -80,7 +80,7 @@ class TCPSocket extends TCPSocketBase {
           if (ev.id !== id) {
             return;
           }
-          this.onerror && this.onerror(new Error(ev.message));
+          this.onerror && this.onerror(new Error(ev.data));
           this._unregisterEvents();
           RCTTCPSocketManager.close(id);
         }.bind(this)

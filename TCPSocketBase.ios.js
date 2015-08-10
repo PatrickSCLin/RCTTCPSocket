@@ -49,11 +49,10 @@ class TCPSocketBase {
     if (this.readyState === TCPSocketBase.CONNECTING) {
       throw new Error('INVALID_STATE_ERR');
     }
-
     if (typeof data === 'string') {
       this.sendStringImpl(data);
-    } else if (data instanceof ArrayBuffer) {
-      this.sendArrayBufferImpl(data);
+    } else if (data instanceof Uint8Array) {
+      this.sendByteArrayImpl(data);
     } else {
       throw new Error('Not supported data type');
     }
@@ -75,7 +74,7 @@ class TCPSocketBase {
     throw new Error('Subclass must define sendStringImpl method');
   }
 
-  sendArrayBufferImpl(): void {
+  sendByteArrayImpl(): void {
     throw new Error('Subclass must define sendArrayBufferImpl method');
   }
 

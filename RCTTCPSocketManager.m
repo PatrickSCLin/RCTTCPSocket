@@ -60,9 +60,15 @@ RCT_EXPORT_METHOD(connect:(NSString *)host port:(NSUInteger)port socketID:(NSNum
   [tcpSocket connectToHost:host onPort:port error:nil];
 }
 
-RCT_EXPORT_METHOD(send:(NSString *)message socketID:(NSNumber *)socketID)
+RCT_EXPORT_METHOD(send:(NSString *)message socketID:(NSNumber *)socketID encoded:(BOOL)encoded)
 {
-  [_sockets[socketID] writeData:[message dataUsingEncoding:NSUTF8StringEncoding]];
+  if (encoded) {
+      [_sockets[socketID] writeData:[[NSData alloc] initWithBase64EncodedString:message options:NSDataBase64DecodingIgnoreUnknownCharacters] withTimeout:-1 tag:-1];
+  }
+  else {
+    [_sockets[socketID] writeData:[message dataUsingEncoding:[NSString defaultCStringEncoding]] withTimeout:-1 tag:-1];
+  }
+  [_sockets[socketID] readDataWithTimeout:-1 tag:-1];
 }
 
 RCT_EXPORT_METHOD(close:(NSNumber *)socketID)
@@ -75,40 +81,39 @@ RCT_EXPORT_METHOD(close:(NSNumber *)socketID)
 
 - (void)socket:(GCDAsyncSocket *)sock didReadData:(NSData *)data withTag:(long)tag
 {
-    [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPsocketMessage" body:@{
-                                                                                @"data": [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding],
-                                                                                @"id": sock.reactTag
-                                                                                }];
+  NSDictionary* body = @{
+                         @"data": [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength],
+                         @"id": sock.reactTag
+                         };
+  [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPSocketMessage" body:body];
 }
 
 - (void)socket:(GCDAsyncSocket *)sock didConnectToHost:(NSString *)host port:(uint16_t)port
 {
-    [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPsocketOpen" body:@{
-                                                                             @"id": sock.reactTag
-                                                                             }];
+  [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPSocketOpen" body:@{
+                                                                           @"id": sock.reactTag
+                                                                          }];
+  [sock readDataWithTimeout:-1 tag:-1];
 }
 
 - (void)socketDidDisconnect:(GCDAsyncSocket *)sock withError:(NSError *)err
 {
-    NSDictionary* body = nil;
-    
-    if (err) {
-        
-        body = @{
-                 @"message":[err localizedDescription],
-                 @"id": sock.reactTag
-                 };
-        
-    }
-         
-    else {
-        body = @{
-                 @"id": sock.reactTag
-                 };
-        
-    }
-    
-    [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPsocketClosed" body:body];
+  NSDictionary* body = nil;
+  
+  if (err) {
+    body = @{
+             @"message":[err localizedDescription],
+             @"id": sock.reactTag
+             };
+  }
+       
+  else {
+    body = @{
+             @"id": sock.reactTag
+             };
+      
+  }
+  [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPSocketClosed" body:body];
 }
 
 @end
