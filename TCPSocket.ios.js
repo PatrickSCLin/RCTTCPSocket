@@ -1,7 +1,8 @@
 'use strict';
 
-var RCTDeviceEventEmitter = require('RCTDeviceEventEmitter');
-var RCTTCPSocketManager = require('NativeModules').TCPSocketManager;
+var React = require('react-native');
+var { NativeAppEventEmitter, NativeModules } = React;
+var RCTTCPSocketManager = NativeModules.TCPSocketManager;
 
 var TCPSocketBase = require('./TCPSocketBase.ios');
 var Base64 = require('base64-js');
@@ -41,18 +42,23 @@ class TCPSocket extends TCPSocketBase {
 
   _registerEvents(id: number): void {
     this._subs = [
-      RCTDeviceEventEmitter.addListener(
+      NativeAppEventEmitter.addListener(
         'TCPSocketMessage',
         function(ev) {
           if (ev.id !== id) {
             return;
           }
-          this.ondata && this.ondata({
-            data: Base64.toByteArray(ev.data)
-          });
+          if (this.ondata) {
+            var buf = typeof Buffer === 'undefined'
+              ? Base64.toByteArray(ev.data)
+              : new Buffer(ev.data, 'base64');
+            this.ondata({
+                data: buf
+              });
+          }
         }.bind(this)
       ),
-      RCTDeviceEventEmitter.addListener(
+      NativeAppEventEmitter.addListener(
         'TCPSocketOpen',
         function(ev) {
           if (ev.id !== id) {
@@ -62,7 +68,7 @@ class TCPSocket extends TCPSocketBase {
           this.onopen && this.onopen();
         }.bind(this)
       ),
-      RCTDeviceEventEmitter.addListener(
+      NativeAppEventEmitter.addListener(
         'TCPSocketClosed',
         function(ev) {
           if (ev.id !== id) {
@@ -74,8 +80,8 @@ class TCPSocket extends TCPSocketBase {
           RCTTCPSocketManager.close(id);
         }.bind(this)
       ),
-      RCTDeviceEventEmitter.addListener(
-        'TCPsocketFailed',
+      NativeAppEventEmitter.addListener(
+        'TCPSocketFailed',
         function(ev) {
           if (ev.id !== id) {
             return;
