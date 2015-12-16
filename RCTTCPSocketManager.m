@@ -11,7 +11,6 @@
 #import "RCTBridge.h"
 #import "RCTEventDispatcher.h"
 #import "GCDAsyncSocket.h"
-#import "RCTSparseArray.h"
 #import "RCTUtils.h"
 
 @implementation GCDAsyncSocket (React)
@@ -34,7 +33,7 @@
 
 @implementation RCTTCPSocketManager
 {
-    RCTSparseArray *_sockets;
+    NSMutableDictionary<NSNumber *, GCDAsyncSocket *> *_sockets;
 }
 
 RCT_EXPORT_MODULE()
@@ -44,20 +43,20 @@ RCT_EXPORT_MODULE()
 - (instancetype)init
 {
   if ((self = [super init])) {
-    _sockets = [[RCTSparseArray alloc] init];
+    _sockets = [NSMutableDictionary new];
   }
   return self;
 }
 
 - (void)dealloc
 {
-  for (GCDAsyncSocket *socket in _sockets.allObjects) {
+  for (GCDAsyncSocket *socket in _sockets.allValues) {
     socket.delegate = nil;
     [socket disconnect];
   }
 }
 
-RCT_EXPORT_METHOD(connect:(NSString *)host port:(NSUInteger)port socketID:(NSNumber *)socketID)
+RCT_EXPORT_METHOD(connect:(NSString *)host port:(NSUInteger)port socketID:(nonnull NSNumber *)socketID)
 {
   GCDAsyncSocket *tcpSocket = [[GCDAsyncSocket alloc] initWithSocketQueue:nil];
   tcpSocket.delegate = self;
@@ -67,7 +66,7 @@ RCT_EXPORT_METHOD(connect:(NSString *)host port:(NSUInteger)port socketID:(NSNum
   [tcpSocket connectToHost:host onPort:port error:nil];
 }
 
-RCT_EXPORT_METHOD(send:(NSString *)message socketID:(NSNumber *)socketID encoded:(BOOL)encoded)
+RCT_EXPORT_METHOD(send:(NSString *)message socketID:(nonnull NSNumber *)socketID encoded:(BOOL)encoded)
 {
   if (encoded) {
       [_sockets[socketID] writeData:[[NSData alloc] initWithBase64EncodedString:message options:NSDataBase64DecodingIgnoreUnknownCharacters] withTimeout:-1 tag:-1];
@@ -78,10 +77,10 @@ RCT_EXPORT_METHOD(send:(NSString *)message socketID:(NSNumber *)socketID encoded
   [_sockets[socketID] readDataWithTimeout:-1 tag:-1];
 }
 
-RCT_EXPORT_METHOD(close:(NSNumber *)socketID)
+RCT_EXPORT_METHOD(close:(nonnull NSNumber *)socketID)
 {
   [_sockets[socketID] disconnect];
-  _sockets[socketID] = nil;
+  [_sockets removeObjectForKey:socketID];
 }
 
 #pragma mark - RCTSRTCPSocketDelegate methods
@@ -89,15 +88,18 @@ RCT_EXPORT_METHOD(close:(NSNumber *)socketID)
 - (void)socket:(GCDAsyncSocket *)sock didReadData:(NSData *)data withTag:(long)tag
 {
   NSDictionary* body = @{
-                         @"data": [data base64EncodedStringWithOptions:NSDataBase64Encoding64CharacterLineLength],
+                         @"data": [data base64EncodedStringWithOptions:0],
                          @"id": sock.reactTag
                          };
-  [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPSocketMessage" body:body];
+  [_bridge.eventDispatcher sendAppEventWithName:@"TCPSocketMessage" body:body];
+
+  // Queue up another read so that we continue to pull in data.
+  [sock readDataWithTimeout:-1 tag:-1];
 }
 
 - (void)socket:(GCDAsyncSocket *)sock didConnectToHost:(NSString *)host port:(uint16_t)port
 {
-  [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPSocketOpen" body:@{
+  [_bridge.eventDispatcher sendAppEventWithName:@"TCPSocketOpen" body:@{
                                                                            @"id": sock.reactTag
                                                                           }];
   [sock readDataWithTimeout:-1 tag:-1];
@@ -106,21 +108,21 @@ RCT_EXPORT_METHOD(close:(NSNumber *)socketID)
 - (void)socketDidDisconnect:(GCDAsyncSocket *)sock withError:(NSError *)err
 {
   NSDictionary* body = nil;
-  
+
   if (err) {
     body = @{
              @"message":[err localizedDescription],
              @"id": sock.reactTag
              };
   }
-       
+
   else {
     body = @{
              @"id": sock.reactTag
              };
-      
+
   }
-  [_bridge.eventDispatcher sendDeviceEventWithName:@"TCPSocketClosed" body:body];
+  [_bridge.eventDispatcher sendAppEventWithName:@"TCPSocketClosed" body:body];
 }
 
 @end
